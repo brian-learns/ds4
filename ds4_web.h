@@ -30,4 +30,8 @@ char *ds4_web_google_search(ds4_web *web, const char *query,
 char *ds4_web_visit_page(ds4_web *web, const char *url,
                          char *err, size_t err_len);
 
+char *ds4_web_searxng_search(ds4_web *web, const char *query,
+                             const char *server_url,
+                             char *err, size_t err_len);
+
 #endif

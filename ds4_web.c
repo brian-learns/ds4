@@ -1383,3 +1383,50 @@ char *ds4_web_visit_page(ds4_web *web, const char *url,
     }
     return web_run_page_js(web, url, web_extract_page_js, true, err, err_len);
 }
+
+/* JavaScript to extract SearXNG JSON results and format as Markdown.
+ * The page body contains raw JSON; parse it and produce a compact result list. */
+static const char *web_extract_searxng_js =
+"(() => {"
+"const clean=s=>(s||'').replace(/\\s+/g,' ').trim();"
+"const esc=s=>clean(s).replace(/\\\\/g,'\\\\\\\\').replace(/\\[/g,'\\\\[').replace(/\\]/g,'\\\\]').replace(/\\n/g,' ');"
+"try{"
+"const text=document.body.innerText||document.body.textContent||'';"
+"const data=JSON.parse(text);"
+"const results=data.results||[];"
+"if(!results.length)return 'No search results found.';"
+"const lines=['## SearXNG search results',''];"
+"for(const r of results){"
+"const title=esc(r.title||'(untitled)');"
+"const url=r.url||'';"
+"const snippet=r.content?clean(r.content).slice(0,200):'';"
+"lines.push('- ['+title+']('+url+')'+(snippet?' — '+snippet:'')+'');"
+"}"
+"return lines.join('\\n');"
+"}catch(e){return 'Error parsing SearXNG results: '+e.message+'\\n'+document.body.innerText.slice(0,2000);}"
+"})()";
+
+char *ds4_web_searxng_search(ds4_web *web, const char *query,
+                             const char *server_url,
+                             char *err, size_t err_len) {
+    if (!web) {
+        web_set_err(err, err_len, "web subsystem is not initialized");
+        return NULL;
+    }
+    if (!query || !query[0]) {
+        web_set_err(err, err_len, "searxng_search requires query");
+        return NULL;
+    }
+    const char *base = server_url && server_url[0] ? server_url : "http://127.0.0.1:7080";
+    char *q = web_url_encode(query);
+    web_buf url = {0};
+    web_buf_puts(&url, base);
+    web_buf_puts(&url, "/search?q=");
+    web_buf_puts(&url, q);
+    web_buf_puts(&url, "&format=json");
+    free(q);
+    char *url_s = web_buf_take(&url);
+    char *out = web_run_page_js(web, url_s, web_extract_searxng_js, false, err, err_len);
+    free(url_s);
+    return out;
+}

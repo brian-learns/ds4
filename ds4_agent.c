@@ -932,6 +932,20 @@ static const char agent_tools_prompt_after_edit[] =
     "      \"required\": [\"path\"]\n"
     "    }\n"
     "  }\n"
+    "}\n\n"
+    "{\n"
+    "  \"type\": \"function\",\n"
+    "  \"function\": {\n"
+    "    \"name\": \"searxng_search\",\n"
+    "    \"description\": \"Search the web via SearXNG meta-search engine and return compact Markdown links.\",\n"
+    "    \"parameters\": {\n"
+    "      \"type\": \"object\",\n"
+    "      \"properties\": {\n"
+    "        \"query\": {\"type\": \"string\"}\n"
+    "      },\n"
+    "      \"required\": [\"query\"]\n"
+    "    }\n"
+    "  }\n"
     "}\n"
     "\n"
     "# Rules\n\n"
@@ -2772,6 +2786,7 @@ static const char *agent_tool_viz_prefix(const char *name) {
     if (!strcmp(name, "edit")) return "edit ";
     if (!strcmp(name, "search")) return "search ";
     if (!strcmp(name, "google_search")) return "google ";
+    if (!strcmp(name, "searxng_search")) return "searxng ";
     if (!strcmp(name, "visit_page")) return "visit ";
     return NULL;
 }
@@ -6571,6 +6586,23 @@ static char *agent_tool_google_search(agent_worker *w, const agent_tool_call *ca
     return md;
 }
 
+static char *agent_tool_searxng_search(agent_worker *w, const agent_tool_call *call) {
+    const char *query = agent_tool_arg_value(call, "query");
+    if (!query || !query[0]) return xstrdup("Tool error: searxng_search requires query\n");
+    const char *server = getenv("SEARXNG_SERVER");
+    char err[256] = {0};
+    agent_publishf_system_status(w, "Searching SearXNG for %s...", query);
+    char *md = ds4_web_searxng_search(w->web, query, server, err, sizeof(err));
+    if (!md) {
+        agent_buf b = {0};
+        agent_buf_puts(&b, "Tool error: searxng_search failed: ");
+        agent_buf_puts(&b, err[0] ? err : "unknown error");
+        agent_buf_puts(&b, "\n");
+        return agent_buf_take(&b);
+    }
+    return md;
+}
+
 static char *agent_tool_visit_page(agent_worker *w, const agent_tool_call *call) {
     const char *url = agent_tool_arg_value(call, "url");
     if (!url || !url[0]) return xstrdup("Tool error: visit_page requires url\n");
@@ -7151,6 +7183,7 @@ static char *agent_execute_tool_call(agent_worker *w, const agent_tool_call *cal
     if (!strcmp(call->name, "edit")) return agent_tool_edit(w, call);
     if (!strcmp(call->name, "search")) return agent_tool_search(w, call);
     if (!strcmp(call->name, "google_search")) return agent_tool_google_search(w, call);
+    if (!strcmp(call->name, "searxng_search")) return agent_tool_searxng_search(w, call);
     if (!strcmp(call->name, "visit_page")) return agent_tool_visit_page(w, call);
 
     if (!strcmp(call->name, "bash")) {
